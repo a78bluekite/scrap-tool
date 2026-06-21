@@ -1,0 +1,48 @@
+name: ScrapApp
+options:
+  bundleIdPrefix: com.scraptool
+  deploymentTarget:
+    iOS: "16.0"
+  developmentLanguage: ko
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    CODE_SIGNING_ALLOWED: NO
+    CODE_SIGNING_REQUIRED: NO
+    CODE_SIGN_IDENTITY: ""
+    DEVELOPMENT_TEAM: ""
+    TARGETED_DEVICE_FAMILY: "1"
+targets:
+  ScrapApp:
+    type: application
+    platform: iOS
+    sources:
+      - path: ScrapApp
+      - path: Shared
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.scraptool.app
+        INFOPLIST_FILE: ScrapApp/Info.plist
+        CODE_SIGN_ENTITLEMENTS: ScrapApp/ScrapApp.entitlements
+    dependencies:
+      - target: ShareExtension
+        embed: true
+  ShareExtension:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: ShareExtension
+      - path: Shared
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.scraptool.app.share
+        INFOPLIST_FILE: ShareExtension/Info.plist
+        CODE_SIGN_ENTITLEMENTS: ShareExtension/ShareExtension.entitlements
+        APPLICATION_EXTENSION_API_ONLY: YES
+schemes:
+  ScrapApp:
+    build:
+      targets:
+        ScrapApp: all
+    archive:
+      config: Release

@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+build/
+dist/
+
+ios/*.xcodeproj
+ios/Payload/
+ios/*.ipa
+ios/DerivedData/
+.DS_Store
