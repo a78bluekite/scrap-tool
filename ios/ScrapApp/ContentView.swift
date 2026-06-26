@@ -17,6 +17,8 @@ struct ContentView: View {
     @State private var aiLoading       = false
     @State private var selectedFolderId: String = "default"
     @State private var photoItem: PhotosPickerItem?
+    @State private var lastClipboardCount = UIPasteboard.general.changeCount
+    @AppStorage("autoScrapClipboard") private var autoScrapClipboard = false
 
     var filteredItems: [ScrapItem] {
         store.items
@@ -111,6 +113,7 @@ struct ContentView: View {
             .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
                 store.load()
                 ensureSelectedFolderValid()
+                checkClipboardOnForeground()
             }
         }
     }
@@ -222,6 +225,17 @@ struct ContentView: View {
         if !store.folders.contains(where: { $0.id == selectedFolderId }) {
             selectedFolderId = store.folders.first?.id ?? "default"
         }
+    }
+
+    private func checkClipboardOnForeground() {
+        let current = UIPasteboard.general.changeCount
+        guard autoScrapClipboard, current != lastClipboardCount else { return }
+        lastClipboardCount = current
+        guard let text = UIPasteboard.general.string?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !text.isEmpty else { return }
+        store.addText(text, folderId: selectedFolderId)
+        clipboardToast = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) { clipboardToast = false }
     }
 
     private func scrapFromClipboard() {
