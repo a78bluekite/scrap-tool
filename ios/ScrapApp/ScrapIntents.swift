@@ -23,7 +23,7 @@ struct ScrapAppShortcuts: AppShortcutsProvider {
     static var appShortcuts: [AppShortcut] {
         AppShortcut(
             intent: ScrapClipboardIntent(),
-            phrases: ["클립보드 스크랩", "\(.applicationName) 스크랩"],
+            phrases: ["\(.applicationName) 클립보드 스크랩", "\(.applicationName) 스크랩"],
             shortTitle: "클립보드 스크랩",
             systemImageName: "doc.on.clipboard"
         )
