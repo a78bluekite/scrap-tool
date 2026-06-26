@@ -19,3 +19,9 @@ struct ScrapItem: Identifiable, Codable, Equatable {
     var timestamp: Date
     var order: Int
 }
+
+struct Favorite: Identifiable, Codable, Equatable {
+    var id: UUID
+    var name: String
+    var url: String
+}

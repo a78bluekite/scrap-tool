@@ -1,14 +1,13 @@
 import Foundation
 import Combine
 
-/// Persists scraps/folders to the shared App Group container so both the
-/// main app and the Share Extension (separate processes) see the same data.
 final class ScrapStore: ObservableObject {
     static let appGroupId = "group.com.scraptool.app"
     static let shared = ScrapStore()
 
     @Published var folders: [Folder] = []
     @Published var items: [ScrapItem] = []
+    @Published var favorites: [Favorite] = []
 
     private var containerURL: URL? {
         FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: Self.appGroupId)
@@ -26,6 +25,7 @@ final class ScrapStore: ObservableObject {
     private struct DiskModel: Codable {
         var folders: [Folder]
         var items: [ScrapItem]
+        var favorites: [Favorite]?
     }
 
     init() {
@@ -34,18 +34,26 @@ final class ScrapStore: ObservableObject {
             folders = [Folder(id: "default", name: "기본")]
             save()
         }
+        if favorites.isEmpty {
+            favorites = [
+                Favorite(id: UUID(), name: "Google", url: "https://www.google.com"),
+                Favorite(id: UUID(), name: "Naver",  url: "https://www.naver.com"),
+            ]
+            save()
+        }
     }
 
     func load() {
         guard let url = dataURL, let data = try? Data(contentsOf: url) else { return }
         guard let model = try? JSONDecoder.scrap.decode(DiskModel.self, from: data) else { return }
-        folders = model.folders
-        items = model.items
+        folders  = model.folders
+        items    = model.items
+        favorites = model.favorites ?? []
     }
 
     func save() {
         guard let url = dataURL else { return }
-        let model = DiskModel(folders: folders, items: items)
+        let model = DiskModel(folders: folders, items: items, favorites: favorites)
         guard let data = try? JSONEncoder.scrap.encode(model) else { return }
         try? data.write(to: url, options: .atomic)
     }
@@ -85,8 +93,29 @@ final class ScrapStore: ObservableObject {
         save()
     }
 
+    func move(filteredItems: [ScrapItem], from source: IndexSet, to destination: Int) {
+        var arr = filteredItems
+        arr.move(fromOffsets: source, toOffset: destination)
+        for (idx, item) in arr.enumerated() {
+            if let i = self.items.firstIndex(where: { $0.id == item.id }) {
+                self.items[i].order = arr.count - idx
+            }
+        }
+        save()
+    }
+
     func addFolder(name: String) {
         folders.append(Folder(id: UUID().uuidString, name: name))
+        save()
+    }
+
+    func addFavorite(name: String, url: String) {
+        favorites.append(Favorite(id: UUID(), name: name, url: url))
+        save()
+    }
+
+    func deleteFavorite(_ favorite: Favorite) {
+        favorites.removeAll { $0.id == favorite.id }
         save()
     }
 
