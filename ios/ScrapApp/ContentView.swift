@@ -1,19 +1,22 @@
 import SwiftUI
+import PhotosUI
 import UIKit
 
 struct ContentView: View {
     @EnvironmentObject var store: ScrapStore
-    @State private var showSettings = false
-    @State private var showAddText = false
-    @State private var showAddFolder = false
-    @State private var showFavorites = false
-    @State private var showCollect = false
-    @State private var showAIResult = false
+    @State private var showSettings    = false
+    @State private var showAddText     = false
+    @State private var showAddFolder   = false
+    @State private var showFavorites   = false
+    @State private var showCollect     = false
+    @State private var showAIResult    = false
     @State private var showClearConfirm = false
-    @State private var aiTitle = ""
-    @State private var aiResult = ""
-    @State private var aiLoading = false
+    @State private var clipboardToast  = false
+    @State private var aiTitle         = ""
+    @State private var aiResult        = ""
+    @State private var aiLoading       = false
     @State private var selectedFolderId: String = "default"
+    @State private var photoItem: PhotosPickerItem?
 
     var filteredItems: [ScrapItem] {
         store.items
@@ -26,9 +29,11 @@ struct ContentView: View {
             VStack(spacing: 0) {
                 folderBar
                 Divider()
+                actionBar
+                Divider()
                 if filteredItems.isEmpty {
                     Spacer()
-                    Text("아직 스크랩이 없습니다.\n다른 앱에서 텍스트를 선택해 공유하거나,\n+ 버튼으로 직접 추가하세요.")
+                    Text("아직 스크랩이 없습니다.\n위 버튼으로 추가하거나 다른 앱에서 공유하세요.")
                         .multilineTextAlignment(.center)
                         .foregroundColor(.secondary)
                         .padding()
@@ -59,22 +64,45 @@ struct ContentView: View {
                     HStack {
                         Button { showFavorites = true } label: { Image(systemName: "star") }
                         EditButton()
-                        Button { showAddText = true } label: { Image(systemName: "plus") }
                     }
                 }
             }
-            .sheet(isPresented: $showSettings)   { SettingsView() }
-            .sheet(isPresented: $showAddText)    { AddTextView(folderId: selectedFolderId) }
-            .sheet(isPresented: $showAddFolder)  { AddFolderView() }
-            .sheet(isPresented: $showFavorites)  { FavoritesView() }
-            .sheet(isPresented: $showCollect)    { ResultView(title: "📋 취합 결과", content: collectText()) }
-            .sheet(isPresented: $showAIResult)   { ResultView(title: aiTitle, content: aiResult) }
+            .overlay(alignment: .top) {
+                if clipboardToast {
+                    Text("클립보드 내용을 스크랩했습니다")
+                        .font(.footnote)
+                        .padding(.horizontal, 16).padding(.vertical, 8)
+                        .background(Color.accentColor)
+                        .foregroundColor(.white)
+                        .clipShape(Capsule())
+                        .padding(.top, 8)
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                }
+            }
+            .animation(.easeInOut(duration: 0.3), value: clipboardToast)
+            .sheet(isPresented: $showSettings)    { SettingsView() }
+            .sheet(isPresented: $showAddText)     { AddTextView(folderId: selectedFolderId) }
+            .sheet(isPresented: $showAddFolder)   { AddFolderView() }
+            .sheet(isPresented: $showFavorites)   { FavoritesView() }
+            .sheet(isPresented: $showCollect)     { ResultView(title: "📋 취합 결과", content: collectText()) }
+            .sheet(isPresented: $showAIResult)    { ResultView(title: aiTitle, content: aiResult) }
             .alert("폴더 비우기", isPresented: $showClearConfirm) {
                 Button("삭제", role: .destructive) { clearCurrentFolder() }
                 Button("취소", role: .cancel) {}
             } message: {
                 let name = store.folders.first(where: { $0.id == selectedFolderId })?.name ?? "현재"
                 Text("'\(name)' 폴더의 스크랩 \(filteredItems.count)개를 모두 삭제할까요?")
+            }
+            .task(id: photoItem) {
+                guard let item = photoItem else { return }
+                if let data = try? await item.loadTransferable(type: Data.self),
+                   let image = UIImage(data: data) {
+                    let text = await OCR.recognizeText(in: image)
+                    if let jpeg = image.jpegData(compressionQuality: 0.85) {
+                        store.addImage(jpeg, recognizedText: text, folderId: selectedFolderId)
+                    }
+                    photoItem = nil
+                }
             }
             .onAppear {
                 store.load()
@@ -87,7 +115,46 @@ struct ContentView: View {
         }
     }
 
-    // MARK: - 하단 툴바
+    // MARK: - 액션 버튼 바 (PC의 상단 버튼 행에 대응)
+
+    private var actionBar: some View {
+        HStack(spacing: 0) {
+            // 클립보드 스크랩 — PC의 "선택 텍스트" 모드에 대응
+            // iOS는 앱 간 드래그 감지가 불가하므로, 다른 앱에서 복사 후 이 버튼으로 스크랩
+            actionBtn(icon: "doc.on.clipboard", label: "클립보드 스크랩") {
+                scrapFromClipboard()
+            }
+            Divider().frame(height: 32)
+            // 사진 가져오기 — PC의 "화면 캡처"에 대응
+            PhotosPicker(selection: $photoItem, matching: .images) {
+                VStack(spacing: 2) {
+                    Image(systemName: "photo").font(.system(size: 15))
+                    Text("사진 가져오기").font(.caption2)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 6)
+            }
+            Divider().frame(height: 32)
+            actionBtn(icon: "text.cursor", label: "텍스트 입력") {
+                showAddText = true
+            }
+        }
+        .frame(height: 50)
+        .background(Color(.systemGray6))
+    }
+
+    private func actionBtn(icon: String, label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(spacing: 2) {
+                Image(systemName: icon).font(.system(size: 15))
+                Text(label).font(.caption2)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 6)
+        }
+    }
+
+    // MARK: - 하단 AI 툴바
 
     private var bottomBar: some View {
         HStack(spacing: 0) {
@@ -155,6 +222,14 @@ struct ContentView: View {
         if !store.folders.contains(where: { $0.id == selectedFolderId }) {
             selectedFolderId = store.folders.first?.id ?? "default"
         }
+    }
+
+    private func scrapFromClipboard() {
+        guard let text = UIPasteboard.general.string?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !text.isEmpty else { return }
+        store.addText(text, folderId: selectedFolderId)
+        clipboardToast = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) { clipboardToast = false }
     }
 
     private func clearCurrentFolder() {

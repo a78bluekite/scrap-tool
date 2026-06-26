@@ -30,5 +30,7 @@
     </array>
     <key>ITSAppUsesNonExemptEncryption</key>
     <false/>
+    <key>NSPhotoLibraryUsageDescription</key>
+    <string>사진을 스크랩 항목으로 가져오기 위해 사용합니다.</string>
 </dict>
 </plist>
